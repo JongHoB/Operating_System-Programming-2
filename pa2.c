@@ -402,8 +402,75 @@ struct scheduler prio_scheduler = {
 /***********************************************************************
  * Priority scheduler with aging
  ***********************************************************************/
+static bool pa_acquire(int resource_id)
+{
+	struct resource *r = resources + resource_id;
+	if (!r->owner) {
+		r->owner = current;
+		return true;
+	}	
+	current->status = PROCESS_BLOCKED;	
+	list_add_tail(&current->list, &r->waitqueue);	
+	return false;
+}
+
+static void pa_release(int resource_id)
+{
+struct resource *r = resources + resource_id;
+
+	assert(r->owner == current);	
+	r->owner = NULL;	
+	if (!list_empty(&r->waitqueue)) {
+		struct process *waiter = NULL;
+		struct process *temp = NULL;
+		int maxpriority = -1;
+		list_for_each_entry(temp, &r->waitqueue, list){
+			if((int)temp->prio>maxpriority){
+				maxpriority=temp->prio;
+				waiter=temp;
+			}
+		}
+		assert(waiter->status == PROCESS_BLOCKED);
+		list_del_init(&waiter->list);		
+		waiter->status = PROCESS_READY;
+		list_add_tail(&waiter->list, &readyqueue);
+	}	
+}
+
+static struct process *pa_schedule(void){
+	struct process * next = NULL;
+
+	if (!current || current->status == PROCESS_BLOCKED) {
+		goto pick_next;
+	}
+	if(current->age<current->lifespan){
+		list_add_tail(&current->list, &readyqueue);
+	}
+	
+	
+pick_next:
+
+	if(!list_empty(&readyqueue)){
+		int maxpriority=-1;
+
+		struct process *temp=NULL;
+		list_for_each_entry(temp,&readyqueue,list){
+			if((int)temp->prio>maxpriority){
+				maxpriority=temp->prio;
+				next=temp;
+			}
+			temp->prio++;
+		}
+		list_del_init(&next->list);
+		next->prio=next->prio_orig;
+	}
+	return next;
+}
 struct scheduler pa_scheduler = {
 	.name = "Priority + aging",
+	.acquire = pa_acquire,
+	.release = pa_release,
+	.schedule = pa_schedule
 	/**
 	 * Ditto
 	 */
