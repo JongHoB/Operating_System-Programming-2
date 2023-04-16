@@ -323,8 +323,75 @@ struct scheduler rr_scheduler = {
 /***********************************************************************
  * Priority scheduler
  ***********************************************************************/
+static bool prio_acquire(int resource_id)
+{
+	
+	struct resource *r = resources + resource_id;
+	if (!r->owner) {
+	
+		r->owner = current;
+		return true;
+	}	
+	current->status = PROCESS_BLOCKED;	
+	list_add_tail(&current->list, &r->waitqueue);	
+	return false;
+}
+
+static void prio_release(int resource_id)
+{
+struct resource *r = resources + resource_id;
+
+	assert(r->owner == current);	
+	r->owner = NULL;	
+	if (!list_empty(&r->waitqueue)) {
+		struct process *waiter = NULL;
+		struct process *temp = NULL;
+		int maxpriority = -1;
+		list_for_each_entry(temp, &r->waitqueue, list){
+			if((int)temp->prio>maxpriority){
+				maxpriority=temp->prio;
+				waiter=temp;
+			}
+		}
+		assert(waiter->status == PROCESS_BLOCKED);
+		list_del_init(&waiter->list);		
+		waiter->status = PROCESS_READY;
+		list_add_tail(&waiter->list, &readyqueue);
+	}	
+}
+
+static struct process *prio_schedule(void){
+	struct process * next = NULL;
+
+	if (!current || current->status == PROCESS_BLOCKED) {
+		goto pick_next;
+	}
+	if(current->age<current->lifespan){
+		list_add_tail(&current->list, &readyqueue);
+	}
+	
+	
+pick_next:
+
+	if(!list_empty(&readyqueue)){
+		int maxpriority=-1;
+
+		struct process *temp=NULL;
+		list_for_each_entry(temp,&readyqueue,list){
+			if((int)temp->prio>maxpriority){
+				maxpriority=temp->prio;
+				next=temp;
+			}
+		}
+		list_del_init(&next->list);
+	}
+	return next;
+}
 struct scheduler prio_scheduler = {
 	.name = "Priority",
+	.acquire = prio_acquire, 
+	.release = prio_release,
+	.schedule = prio_schedule
 	/**
 	 * Implement your own acqure/release function to make the priority
 	 * scheduler correct.
