@@ -212,7 +212,8 @@ static struct process *sjf_schedule(void)
 	if (current->age < current->lifespan) {
 		return current;
 	}
-	pick_next:
+	
+pick_next:
 
 	if (!list_empty(&readyqueue)) {
 		int minlifespan=50;//temporary value 
@@ -244,10 +245,40 @@ struct scheduler sjf_scheduler = {
 /***********************************************************************
  * STCF scheduler
  ***********************************************************************/
+static struct process *stcf_schedule(void){
+	struct process *next=NULL;
+
+	if (!current || current->status == PROCESS_BLOCKED) {
+		goto pick_next;
+	}
+	if(current->age<current->lifespan){
+		list_add(&current->list,&readyqueue);
+	}
+	
+	
+pick_next:
+
+	if(!list_empty(&readyqueue)){
+		int mintime=50;
+
+		struct process *temp=NULL;
+		list_for_each_entry(temp,&readyqueue,list){
+			if((int)temp->lifespan-(int)temp->age<mintime){
+				mintime=temp->lifespan-temp->age;
+				next=temp;
+			}
+		}
+		list_del_init(&next->list);
+	}
+
+
+	return next;
+}
 struct scheduler stcf_scheduler = {
 	.name = "Shortest Time-to-Complete First",
 	.acquire = fcfs_acquire, /* Use the default FCFS acquire() */
 	.release = fcfs_release, /* Use the default FCFS release() */
+	.schedule= stcf_schedule
 
 	/* You need to check the newly created processes to implement STCF.
 	 * Have a look at @forked() callback.
