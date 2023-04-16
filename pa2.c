@@ -558,8 +558,79 @@ struct scheduler pcp_scheduler = {
 /***********************************************************************
  * Priority scheduler with priority inheritance protocol
  ***********************************************************************/
+static bool pip_acquire(int resource_id)
+{
+	struct resource *r = resources + resource_id;
+	if (!r->owner) {
+		r->owner = current;	
+		return true;
+	}	
+	if(r->owner->prio<current->prio){
+		r->owner->prio=current->prio;
+	}
+	current->status = PROCESS_BLOCKED;	
+	list_add_tail(&current->list, &r->waitqueue);	
+	return false;
+}
+
+static void pip_release(int resource_id)
+{
+struct resource *r = resources + resource_id;
+
+	assert(r->owner == current);
+	current->prio=current->prio_orig;	
+	r->owner = NULL;	
+	if (!list_empty(&r->waitqueue)) {
+		struct process *waiter = NULL;
+		struct process *temp = NULL;
+		int maxpriority = -1;
+		list_for_each_entry(temp, &r->waitqueue, list){
+			if((int)temp->prio>maxpriority){
+				maxpriority=temp->prio;
+				waiter=temp;
+			}
+		}
+		assert(waiter->status == PROCESS_BLOCKED);
+		list_del_init(&waiter->list);		
+		waiter->status = PROCESS_READY;
+		list_add_tail(&waiter->list, &readyqueue);
+	}	
+}
+
+static struct process *pip_schedule(void){
+	struct process * next = NULL;
+
+	if (!current || current->status == PROCESS_BLOCKED) {
+		goto pick_next;
+	}
+	if(current->age<current->lifespan){
+		list_add_tail(&current->list, &readyqueue);
+	}
+	
+	
+pick_next:
+
+	if(!list_empty(&readyqueue)){
+		int maxpriority=-1;
+
+		struct process *temp=NULL;
+		list_for_each_entry(temp,&readyqueue,list){
+			if((int)temp->prio>maxpriority){
+				maxpriority=temp->prio;
+				next=temp;
+			}
+		
+		}
+		list_del_init(&next->list);
+		
+	}
+	return next;
+}
 struct scheduler pip_scheduler = {
 	.name = "Priority + PIP Protocol",
+	.acquire = pip_acquire,
+	.release = pip_release,
+	.schedule = pip_schedule
 	/**
 	 * Ditto
 	 */
