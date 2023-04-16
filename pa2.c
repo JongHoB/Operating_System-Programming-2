@@ -479,8 +479,77 @@ struct scheduler pa_scheduler = {
 /***********************************************************************
  * Priority scheduler with priority ceiling protocol
  ***********************************************************************/
+static bool pcp_acquire(int resource_id)
+{
+	struct resource *r = resources + resource_id;
+	if (!r->owner) {
+		r->owner = current;
+		current->prio=MAX_PRIO;
+		return true;
+	}	
+	current->status = PROCESS_BLOCKED;	
+	list_add_tail(&current->list, &r->waitqueue);	
+	return false;
+}
+
+static void pcp_release(int resource_id)
+{
+struct resource *r = resources + resource_id;
+
+	assert(r->owner == current);
+	current->prio=current->prio_orig;	
+	r->owner = NULL;	
+	if (!list_empty(&r->waitqueue)) {
+		struct process *waiter = NULL;
+		struct process *temp = NULL;
+		int maxpriority = -1;
+		list_for_each_entry(temp, &r->waitqueue, list){
+			if((int)temp->prio>maxpriority){
+				maxpriority=temp->prio;
+				waiter=temp;
+			}
+		}
+		assert(waiter->status == PROCESS_BLOCKED);
+		list_del_init(&waiter->list);		
+		waiter->status = PROCESS_READY;
+		list_add_tail(&waiter->list, &readyqueue);
+	}	
+}
+
+static struct process *pcp_schedule(void){
+	struct process * next = NULL;
+
+	if (!current || current->status == PROCESS_BLOCKED) {
+		goto pick_next;
+	}
+	if(current->age<current->lifespan){
+		list_add_tail(&current->list, &readyqueue);
+	}
+	
+	
+pick_next:
+
+	if(!list_empty(&readyqueue)){
+		int maxpriority=-1;
+
+		struct process *temp=NULL;
+		list_for_each_entry(temp,&readyqueue,list){
+			if((int)temp->prio>maxpriority){
+				maxpriority=temp->prio;
+				next=temp;
+			}
+		
+		}
+		list_del_init(&next->list);
+		
+	}
+	return next;
+}
 struct scheduler pcp_scheduler = {
 	.name = "Priority + PCP Protocol",
+	.acquire = pcp_acquire,
+	.release = pcp_release,
+	.schedule = pcp_schedule
 	/**
 	 * Ditto
 	 */
