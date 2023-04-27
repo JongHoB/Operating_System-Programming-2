@@ -252,7 +252,7 @@ static struct process *stcf_schedule(void){
 		goto pick_next;
 	}
 	if(current->age<current->lifespan){
-		list_add(&current->list,&readyqueue);
+		list_add_tail(&current->list,&readyqueue);
 	}
 	
 	
