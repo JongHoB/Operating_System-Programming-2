@@ -460,6 +460,9 @@ pick_next:
 				next=temp;
 			}
 			temp->prio++;
+			if(temp->prio>MAX_PRIO){
+				temp->prio=MAX_PRIO;
+			}
 		}
 		list_del_init(&next->list);
 		next->prio=next->prio_orig;
